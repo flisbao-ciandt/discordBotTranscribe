@@ -1,1 +1,5 @@
 node_modules
+keyfile.json
+song.wav
+.vscode
+.sonarlint

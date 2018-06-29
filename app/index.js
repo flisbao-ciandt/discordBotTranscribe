@@ -1,6 +1,8 @@
 const Discord = require('discord.js');
 const speech = require('@google-cloud/speech');
-const Converter = require('pcm-bitdepth-converter').From32To16Bit;
+const sox = require('sox-stream');
+
+const fs = require('fs');
 
 const client = new Discord.Client();
 
@@ -22,13 +24,34 @@ const request = {
   singleUtterance: true
 };
 
+const transcode = sox({
+  global: {
+    temp: './temp',
+    'single-threaded': true
+  },
+  input:{
+    type: 'wav'
+  },
+  output:{
+    bits: 16,
+    rate: 16000,
+    channels: 1,
+    type: 'wav'
+  },
+  temp:'./temp/'
+});
+
+transcode.on('error', (err) => console.log(err));
+
 let recognizeStream;
 
 function start() {
   recognizeStream = clientSpeech
       .streamingRecognize(request)
       .on('error', console.error)
+
       .on('data', data => {
+        console.log(data);
         if (data.results[0]) {
           console.log(
             `Transcription: ${data.results[0].alternatives[0].transcript}`
@@ -37,6 +60,8 @@ function start() {
         
       });
 }
+
+const dest = fs.createWriteStream('song.wav');
 
 let converter;
 
@@ -55,24 +80,11 @@ client.on('message', message => {
         message.member.voiceChannel.join()
           .then(connection => { // Connection is an instance of VoiceConnection
             message.reply('I have successfully connected to the channel!');
-            connection.on('speaking',(user, speaking) => {
-              if (speaking) {
-                receiver = connection.createReceiver();
-                readableStream = receiver.createPCMStream(user);
-                converter = new Converter();
-                start();
-                
-                readableStream.pipe(converter).pipe(recognizeStream);
-          
-              } else {
-                receiver.destroy();
-                recognizeStream = null;
-                converter.destroy();
-                console.log('destoyed');
-
-              }
-              
-            });
+            receiver = connection.createReceiver();
+            readableStream = receiver.createPCMStream(client.users.find('username', 'flisbao'));
+            start();
+            readableStream.on('error', (error) => console.log(error));
+            readableStream.pipe(transcode).pipe(dest);
           })
           .catch(console.log);
       } else {
@@ -80,3 +92,29 @@ client.on('message', message => {
       }
     }
   });
+
+
+  /***
+   *             connection.on('speaking',(user, speaking) => {
+              if (speaking) {
+                receiver = connection.createReceiver();
+                readableStream = receiver.createPCMStream(user);
+                //converter = new Converter();
+                start();
+                console.log(readableStream);
+                //readableStream.pipe(recognizeStream);
+                readableStream.on('data', ()=> {
+                  
+                });
+          
+              } else {
+                //receiver.end();
+                //recognizeStream.end();
+                //converter.destroy();
+                console.log('destoyed');
+
+              }
+              
+            });
+
+   */
